@@ -84,7 +84,7 @@ class MainActivity : Activity() {
         outputSelector.check(5101)
         column.addView(outputSelector)
         outputStatus = TextView(this).apply {
-            text = "Steam Controller haptics selected by default. Connect the Puck before playback."
+            text = "Steam Controller haptics selected. Direct USB-C or Puck supported experimentally."
             textSize = 13f
         }
         column.addView(outputStatus)
@@ -183,11 +183,11 @@ class MainActivity : Activity() {
             setOnClickListener { scanControllers() }
         })
         column.addView(Button(this).apply {
-            text = "Connect Puck (direct USB)"
+            text = "Connect Steam Controller (USB-C / Puck)"
             setOnClickListener { connectPuck() }
         })
         column.addView(Button(this).apply {
-            text = "Test direct USB rumble"
+            text = "Test selected USB rumble"
             setOnClickListener {
                 if (!puck.hasPermission()) { connectPuck(); return@setOnClickListener }
                 val result = puck.connect()
@@ -435,12 +435,13 @@ class MainActivity : Activity() {
     private fun playWithNotes(song: MidiSong, filename: String) {
         if (midiOutputMode != 0) {
             if (!puck.hasPermission()) {
-                midiStatus.text = "Connect the Puck in the Controller tab and allow USB access first."
+                connectPuck()
+                midiStatus.text = "Grant USB access to the connected Steam Controller and press Play again."
                 return
             }
             val connected = puck.connect()
             if (!connected.startsWith("Connected")) {
-                midiStatus.text = "Puck connection failed: $connected"
+                midiStatus.text = "USB controller connection failed: $connected"
                 return
             }
         }
@@ -525,25 +526,27 @@ class MainActivity : Activity() {
             catch (_: SecurityException) { emptyList() }
         } else emptyList()
         val info = when {
-            receiver != null && puck.hasPermission() ->
-                "Steam Puck ready for musical USB output. " + puck.connect()
+            direct.isNotEmpty() && puck.hasPermission() ->
+                "Direct USB-C Steam Controller (28DE:1302) selected. " + puck.connect()
             direct.isNotEmpty() ->
-                "Direct USB Valve device found (PID=%04X). Raw musical haptic protocol not yet verified for this interface.".format(direct.first().productId)
-            pairedSteam.isNotEmpty() ->
-                "Paired Steam Bluetooth controller found. Android Bluetooth HID haptic-note output is not yet implemented."
+                "Direct USB-C Steam Controller detected (28DE:1302). Grant USB permission to enable MIDI haptics."
+            receiver != null && puck.hasPermission() ->
+                "Steam Puck selected. " + puck.connect()
             receiver != null ->
-                "Steam Puck found. Grant USB permission from Controller tab."
+                "Steam Puck detected (28DE:1304). Grant USB permission to enable MIDI haptics."
+            pairedSteam.isNotEmpty() ->
+                "Paired Steam Bluetooth controller found. Bluetooth musical note output requires a verified HID transport."
             gamepads.isNotEmpty() ->
-                "Android gamepad found: ${gamepads.first().name}. Musical haptic output is not verified."
-            else -> "No active Steam Controller connection detected."
+                "Android gamepad found: ${gamepads.first().name}. MIDI pitch output is not available over Android's generic vibrator API."
+            else -> "No supported Steam Controller connection detected."
         }
         outputStatus.text = info
         controllerStatus.text = info
     }
 
     private fun connectPuck() {
-        val device = puck.receiver()
-        if (device == null) { controllerStatus.text = "Puck not detected."; return }
+        val device = puck.preferredDevice()
+        if (device == null) { controllerStatus.text = "No supported Steam Controller USB device detected."; return }
         if (puck.hasPermission()) { controllerStatus.text = puck.connect(); return }
         if (usbPermissionReceiver == null) {
             usbPermissionReceiver = object : BroadcastReceiver() {
@@ -560,7 +563,7 @@ class MainActivity : Activity() {
         val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
         val pending = PendingIntent.getBroadcast(this, 0, Intent(puckPermissionAction).setPackage(packageName), flags)
         (getSystemService(USB_SERVICE) as UsbManager).requestPermission(device, pending)
-        controllerStatus.text = "Allow USB access to the Steam Controller Puck."
+        controllerStatus.text = "Allow USB access to the selected Steam Controller device."
     }
 
     private fun controllerVibrator(): Vibrator? {
