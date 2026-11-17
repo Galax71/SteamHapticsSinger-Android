@@ -36,6 +36,7 @@ class SteamBluetoothHaptics(private val context: Context, private val status: (S
     @Volatile private var connecting = false
     private var busy = false
     private var lastWrite = 0L
+    @Volatile private var negotiatedMtu = 23
     @Volatile var lastWriteStatus: String = "No Bluetooth haptic report written"
         private set
     private val trackpad = intArrayOf(0, 9, 9, 10, 10, 11, 12, 12, 13, 14, 15, 15, 16, 17, 18, 19, 21, 22, 23, 24, 26, 28, 29, 31, 33, 35, 37, 39, 41, 44, 46, 49, 52, 55, 58, 62, 65, 69, 73, 78, 82, 87, 92, 98, 104, 110, 117, 123, 131, 139, 147, 156, 165, 175, 185, 196, 208, 220, 233, 247, 261, 276, 293, 310, 328, 349, 369, 391, 414, 439, 466, 493, 522, 552, 584, 621, 658, 696, 738, 781, 828, 877, 929, 985, 1043, 1105, 1171, 1240, 1314, 1392, 1475, 1562, 1655, 1754, 1858, 1969, 2085, 2209, 2340, 2480, 2627, 2784, 2949, 3124, 3311, 3507, 3716, 3938, 4173, 4422, 4686, 4965, 5261, 5575, 5907, 6259, 6632, 7027, 7446, 7889, 8359, 8857, 9384, 9943, 10535, 11162, 11827, 12531)
@@ -83,7 +84,14 @@ class SteamBluetoothHaptics(private val context: Context, private val status: (S
             }
             synchronized(lock) { characteristic = ch; busy = false; queue.clear() }
             ready = true
-            report("Steam Controller 2026 BLE output characteristic ready (experimental). Try a short A4 note.")
+            report("BLE output characteristic found. Requesting MTU for 64-byte reports...")
+            try {
+                if (!g.requestMtu(185)) report("MTU negotiation request rejected; 64-byte reports may fail.")
+            } catch (e: Exception) { report("MTU negotiation error: ${e.message}") }
+        }
+        override fun onMtuChanged(g: BluetoothGatt, mtu: Int, statusCode: Int) {
+            if (statusCode == BluetoothGatt.GATT_SUCCESS) negotiatedMtu = mtu
+            report("BLE negotiated MTU: $negotiatedMtu (64-byte writes require at least 67).")
         }
         override fun onCharacteristicWrite(g: BluetoothGatt, ch: BluetoothGattCharacteristic, statusCode: Int) {
             synchronized(lock) { busy = false }
@@ -123,6 +131,11 @@ class SteamBluetoothHaptics(private val context: Context, private val status: (S
 
     private fun drain() {
         if (!ready || !permitted()) return
+        if (negotiatedMtu < 67) {
+            lastWriteStatus = "BLE MTU $negotiatedMtu too small for 64-byte haptic report; no write sent."
+            report(lastWriteStatus)
+            return
+        }
         val g = gatt ?: return
         val ch = characteristic ?: return
         val now = android.os.SystemClock.uptimeMillis()
@@ -146,6 +159,16 @@ class SteamBluetoothHaptics(private val context: Context, private val status: (S
                 g.writeCharacteristic(ch)
             }
             lastWrite = now
+            if (result) {
+                lastWriteStatus = "BLE write submitted; awaiting GATT acknowledgement."
+                report(lastWriteStatus)
+                main.postDelayed({
+                    if (lastWriteStatus == "BLE write submitted; awaiting GATT acknowledgement.") {
+                        lastWriteStatus = "BLE write timed out waiting for acknowledgement."
+                        report(lastWriteStatus)
+                    }
+                }, 2500L)
+            }
             if (!result) {
                 synchronized(lock) { busy = false }
                 lastWriteStatus = "BLE output report rejected by Android"
@@ -153,7 +176,8 @@ class SteamBluetoothHaptics(private val context: Context, private val status: (S
             }
         } catch (e: Exception) {
             synchronized(lock) { busy = false }
-            report("BLE haptic output failed: ${e.message}")
+            lastWriteStatus = "BLE haptic output failed: ${e.message}"
+            report(lastWriteStatus)
         }
     }
 
