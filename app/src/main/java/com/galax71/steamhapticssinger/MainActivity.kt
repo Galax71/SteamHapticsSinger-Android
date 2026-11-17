@@ -50,10 +50,6 @@ class MainActivity : Activity() {
     private var repeatMidiPlayback = false
     private var limitHapticsToTwoChannels = false
     private val puck by lazy { SteamPuckHaptics(this) }
-    private val bluetoothHaptics by lazy { SteamBluetoothHaptics(this) { message ->
-        if (::controllerStatus.isInitialized) controllerStatus.text = message
-        if (::outputStatus.isInitialized) outputStatus.text = message
-    } }
     private val puckPermissionAction = "com.galax71.steamhapticssinger.USB_PERMISSION"
     private var usbPermissionReceiver: BroadcastReceiver? = null
     private var usbPermissionRequestedFor: String? = null
@@ -201,23 +197,6 @@ class MainActivity : Activity() {
             setOnClickListener { showBluetoothControllers() }
         })
         column.addView(Button(this).apply {
-            text = "Connect Steam Controller Bluetooth haptics (experimental)"
-            setOnClickListener { controllerStatus.text = bluetoothHaptics.connect() }
-        })
-        column.addView(Button(this).apply {
-            text = "Test Bluetooth musical note (A4, 440 Hz)"
-            setOnClickListener {
-                if (!bluetoothHaptics.ready) {
-                    controllerStatus.text = bluetoothHaptics.connect() + " Wait for the BLE ready status and try again."
-                } else {
-                    val queued = bluetoothHaptics.note(2, 69)
-                    controllerStatus.text = if (queued) "BLE A4 queued; waiting for Bluetooth write result..." else "BLE A4 report could not be queued."
-                    if (queued) handler.postDelayed({ controllerStatus.text = bluetoothHaptics.lastWriteStatus }, 6000L)
-                    if (queued) handler.postDelayed({ bluetoothHaptics.note(2, null) }, 350L)
-                }
-            }
-        })
-        column.addView(Button(this).apply {
             text = "Diagnose Steam Controller Bluetooth services"
             setOnClickListener { diagnoseSteamBluetooth() }
         })
@@ -228,7 +207,7 @@ class MainActivity : Activity() {
             }
         })
         column.addView(TextView(this).apply {
-            text = "Steam Controller 2026 BLE haptic output is experimental. Connect above and check the GATT status before testing MIDI."
+            text = "Bluetooth MIDI haptics: Coming soon (if a working transport can be implemented). Bluetooth pairing and diagnostics remain available; USB-C / Puck are the current experimental haptic outputs."
             textSize = 13f
         })
         column.addView(Button(this).apply {
@@ -503,11 +482,8 @@ class MainActivity : Activity() {
 
     private fun playWithNotes(song: MidiSong, filename: String) {
         if (midiOutputMode != 0) {
-            if (puck.preferredDevice() == null && bluetoothHaptics.ready) {
-                // Bluetooth is already connected and has a writable Valve GATT output.
-            } else if (puck.preferredDevice() == null) {
-                val state = bluetoothHaptics.connect()
-                midiStatus.text = "$state Open the Controller tab and wait for BLE ready, then press Play again. Phone audio will not be used automatically."
+            if (puck.preferredDevice() == null) {
+                midiStatus.text = "Bluetooth MIDI haptics: Coming soon. Connect a Steam Controller over USB-C or Steam Puck, or explicitly select Phone speaker."
                 return
             } else {
                 if (!puck.hasPermission()) {
@@ -740,12 +716,7 @@ class MainActivity : Activity() {
             try { bluetooth?.adapter?.bondedDevices?.filter { it.name?.contains("Steam", true) == true }.orEmpty() }
             catch (_: SecurityException) { emptyList() }
         } else emptyList()
-        if (direct.isEmpty() && receiver == null && pairedSteam.isNotEmpty() && !bluetoothHaptics.ready) {
-            bluetoothHaptics.connect()
-        }
         val info = when {
-            bluetoothHaptics.ready && direct.isEmpty() && receiver == null ->
-                "Steam Controller 2026 BLE output ready (experimental 0x83 MIDI haptics)."
             direct.isNotEmpty() && puck.hasPermission() ->
                 "Direct USB-C Steam Controller (28DE:1302) selected. " + puck.connect()
             direct.isNotEmpty() ->
@@ -755,9 +726,9 @@ class MainActivity : Activity() {
             receiver != null ->
                 "Steam Puck detected (28DE:1304). Grant USB permission to enable MIDI haptics."
             pairedSteam.isNotEmpty() && gamepads.any { it.name.contains("Steam", true) } ->
-                "Steam Controller is paired over Bluetooth and Android exposes a Steam gamepad input device. BLE GATT haptic connection is being attempted; check connection status."
+                "Steam Controller is paired over Bluetooth and Android exposes a Steam gamepad input device. Bluetooth MIDI haptics: Coming soon."
             pairedSteam.isNotEmpty() ->
-                "Steam Controller paired over Bluetooth, but no matching active Android gamepad input device was detected. BLE GATT haptic connection is being attempted; check connection status."
+                "Steam Controller paired over Bluetooth, but no matching active Android gamepad input device was detected. Bluetooth MIDI haptics: Coming soon."
             gamepads.isNotEmpty() ->
                 "Android gamepad found: ${gamepads.first().name}. MIDI pitch output is not available over Android's generic vibrator API."
             else -> "No supported Steam Controller connection detected."
@@ -765,8 +736,8 @@ class MainActivity : Activity() {
         // Never switch to phone audio automatically. The user must explicitly select it.
         // USB-C/Puck are experimental; Bluetooth pairing is detected but musical output
         // is experimental, so keep the controller preference without claiming playback.
-        outputStatus.text = info + if (midiOutputMode == 0) "\\nOutput: Phone speaker (selected by user)." else "\\nOutput: Controller haptics preferred. USB-C/Puck and BLE GATT are experimental."
-        if (!bluetoothHaptics.ready || direct.isNotEmpty() || receiver != null) controllerStatus.text = info
+        outputStatus.text = info + if (midiOutputMode == 0) "\\nOutput: Phone speaker (selected by user)." else "\\nOutput: Controller haptics preferred. USB-C/Puck are experimental; Bluetooth MIDI haptics coming soon."
+        controllerStatus.text = info
     }
 
     private fun connectPuck() {
@@ -848,18 +819,15 @@ class MainActivity : Activity() {
         if (event.on) {
             // Replace a note only on its assigned actuator; sending note-off
             // before a new note avoids a stuck/drifting actuator.
-            val success = if (puck.preferredDevice() == null && bluetoothHaptics.ready)
-                bluetoothHaptics.note(channel, event.note, event.velocity, puck.musicGain, puck.swapTrackpadAndRumble)
-                else puck.note(channel, event.note, event.velocity)
+            val success = puck.note(channel, event.note, event.velocity)
             hapticNotes[channel] = if (success) event.note else -1
             if (!success && !lastHapticErrorShown) {
                 lastHapticErrorShown = true
-                handler.post { outputStatus.text = "Controller 0x83 note could not be queued; check USB or Bluetooth transport." }
+                handler.post { outputStatus.text = "Controller 0x83 note could not be queued; check USB-C or Puck connection." }
             }
         } else if (previousNote == event.note) {
             // An old note-off must not silence a newer note on this channel.
-            if (puck.preferredDevice() == null && bluetoothHaptics.ready) bluetoothHaptics.note(channel, null)
-            else puck.note(channel, null)
+            puck.note(channel, null)
             hapticNotes[channel] = -1
         }
     }
@@ -867,7 +835,6 @@ class MainActivity : Activity() {
     private fun stopControllerNotes() {
         for (i in hapticNotes.indices) hapticNotes[i] = -1
         puck.stopNotes()
-        bluetoothHaptics.stop()
     }
 
     private fun scanControllers() {
@@ -935,7 +902,6 @@ class MainActivity : Activity() {
         player.stop()
         cancelControllerVibration()
         puck.close()
-        bluetoothHaptics.close()
         usbPermissionReceiver?.let { try { unregisterReceiver(it) } catch (_: Exception) {} }
         super.onDestroy()
     }
