@@ -548,7 +548,12 @@ class MainActivity : Activity() {
         val selected = puck.preferredDevice()
         if (selected != null && !puck.hasPermission()) {
             connectPuck()
+            return // Wait for the USB permission result before asking for Bluetooth.
         }
+        promptForBluetoothPermissionIfNeeded()
+    }
+
+    private fun promptForBluetoothPermissionIfNeeded() {
         // Request Nearby devices once automatically; the Bluetooth button can retry
         // after a denial without repeatedly interrupting every app launch.
         if (Build.VERSION.SDK_INT >= 31 &&
@@ -657,6 +662,7 @@ class MainActivity : Activity() {
                     usbPermissionRequestedFor = null
                     controllerStatus.text = if (intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false))
                         puck.connect() else "USB permission denied."
+                    handler.post { promptForBluetoothPermissionIfNeeded() }
                 }
             }
             val filter = IntentFilter(puckPermissionAction)
