@@ -46,6 +46,8 @@ class MainActivity : Activity() {
     private val puck by lazy { SteamPuckHaptics(this) }
     private val puckPermissionAction = "com.galax71.steamhapticssinger.USB_PERMISSION"
     private var usbPermissionReceiver: BroadcastReceiver? = null
+    private var usbPermissionRequestedFor: String? = null
+    private var startupPermissionCheckScheduled = false
     private lateinit var outputStatus: TextView
     private var lastHapticNote = -1
     private var lastHapticAt = 0L
@@ -237,7 +239,7 @@ class MainActivity : Activity() {
             textSize = 13f
         })
         setupTabbedUi(column)
-        handler.post { autoDetectController() }
+        handler.post { autoDetectController(); promptForNeededPermissionsOnStartup() }
     }
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density + 0.5f).toInt()
@@ -539,6 +541,26 @@ class MainActivity : Activity() {
         }
     }
 
+    private fun promptForNeededPermissionsOnStartup() {
+        if (startupPermissionCheckScheduled) return
+        startupPermissionCheckScheduled = true
+        // Android USB access is requested only when a supported USB device exists.
+        val selected = puck.preferredDevice()
+        if (selected != null && !puck.hasPermission()) {
+            connectPuck()
+        }
+        // Request Nearby devices once automatically; the Bluetooth button can retry
+        // after a denial without repeatedly interrupting every app launch.
+        if (Build.VERSION.SDK_INT >= 31 &&
+            packageManager.hasSystemFeature(PackageManager.FEATURE_BLUETOOTH) &&
+            checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED &&
+            !getSharedPreferences("permission_prompts", MODE_PRIVATE).getBoolean("bluetooth_requested", false)) {
+            getSharedPreferences("permission_prompts", MODE_PRIVATE).edit()
+                .putBoolean("bluetooth_requested", true).apply()
+            requestPermissions(arrayOf(Manifest.permission.BLUETOOTH_CONNECT), 2201)
+        }
+    }
+
     private fun showBluetoothControllers() {
         if (!packageManager.hasSystemFeature(PackageManager.FEATURE_BLUETOOTH)) {
             controllerStatus.text = "This device does not have Bluetooth hardware."
@@ -623,10 +645,16 @@ class MainActivity : Activity() {
         val device = puck.preferredDevice()
         if (device == null) { controllerStatus.text = "No supported Steam Controller USB device detected."; return }
         if (puck.hasPermission()) { controllerStatus.text = puck.connect(); return }
+        if (usbPermissionRequestedFor == device.deviceName) {
+            controllerStatus.text = "USB permission already requested. If denied, reconnect the controller or use Connect to retry."
+            return
+        }
+        usbPermissionRequestedFor = device.deviceName
         if (usbPermissionReceiver == null) {
             usbPermissionReceiver = object : BroadcastReceiver() {
                 override fun onReceive(context: Context?, intent: Intent?) {
                     if (intent?.action != puckPermissionAction) return
+                    usbPermissionRequestedFor = null
                     controllerStatus.text = if (intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false))
                         puck.connect() else "USB permission denied."
                 }
