@@ -1,5 +1,9 @@
 # SteamHapticsSinger for Android
 
+<img src="assets/shs_icon_new.svg" alt="Steam Haptics Singer logo (shs_icon_new)" width="120" height="120" />
+
+The app launcher icon uses the same **shs_icon_new** artwork, adapted to an Android vector and adaptive icon with a dark background. Original artwork is from [CrazyCritic89/SteamHapticsSinger](https://github.com/CrazyCritic89/SteamHapticsSinger); upstream attribution and license are preserved.
+
 Android adaptation of [SteamHapticsSinger](https://github.com/CrazyCritic89/SteamHapticsSinger), maintained by Galax71.
 
 This repository is currently a standalone GitHub repository, not a GitHub-network fork of upstream. The Android port incorporates upstream BSD-3-Clause-licensed frequency tables and protocol information, with attribution and original license preserved in [LICENSE](LICENSE).
