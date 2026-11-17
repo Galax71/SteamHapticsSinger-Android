@@ -212,7 +212,7 @@ class MainActivity : Activity() {
                 } else {
                     val queued = bluetoothHaptics.note(2, 69)
                     controllerStatus.text = if (queued) "BLE A4 queued; waiting for Bluetooth write result..." else "BLE A4 report could not be queued."
-                    if (queued) handler.postDelayed({ controllerStatus.text = bluetoothHaptics.lastWriteStatus }, 3000L)
+                    if (queued) handler.postDelayed({ controllerStatus.text = bluetoothHaptics.lastWriteStatus }, 6000L)
                     if (queued) handler.postDelayed({ bluetoothHaptics.note(2, null) }, 350L)
                 }
             }
