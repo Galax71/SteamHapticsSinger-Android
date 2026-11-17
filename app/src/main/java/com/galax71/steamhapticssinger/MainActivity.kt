@@ -603,11 +603,11 @@ class MainActivity : Activity() {
             controllerStatus.text = if (paired.isEmpty()) {
                 "No paired Bluetooth devices found. Use Open Bluetooth pairing settings first."
             } else {
-                "Paired Bluetooth devices (pairing does not prove active connection):\\n" +
-                    paired.joinToString("\\n") { device ->
+                "Paired Bluetooth devices (pairing does not prove active connection):\n" +
+                    paired.joinToString("\n") { device ->
                         (device.name ?: "Unnamed device") +
                             if (device.name?.contains("Steam", ignoreCase = true) == true) " [Steam candidate]" else ""
-                    } + "\\nBluetooth musical haptic output is not implemented; use USB-C or Steam Puck for experimental MIDI notes."
+                    } + "\nBluetooth musical haptic output is not implemented; use USB-C or Steam Puck for experimental MIDI notes."
             }
         } catch (e: SecurityException) {
             controllerStatus.text = "Bluetooth permission denied: ${e.message}"
@@ -647,8 +647,10 @@ class MainActivity : Activity() {
                 "Steam Puck selected. " + puck.connect()
             receiver != null ->
                 "Steam Puck detected (28DE:1304). Grant USB permission to enable MIDI haptics."
+            pairedSteam.isNotEmpty() && gamepads.any { it.name.contains("Steam", true) } ->
+                "Steam Controller is paired over Bluetooth and Android exposes a Steam gamepad input device. Input is available; wireless musical HID output is not implemented."
             pairedSteam.isNotEmpty() ->
-                "Paired Steam Bluetooth controller found. Bluetooth musical note output requires a verified HID transport."
+                "Steam Controller paired over Bluetooth, but no matching active Android gamepad input device was detected. Bluetooth musical HID output is not implemented."
             gamepads.isNotEmpty() ->
                 "Android gamepad found: ${gamepads.first().name}. MIDI pitch output is not available over Android's generic vibrator API."
             else -> "No supported Steam Controller connection detected."
@@ -774,7 +776,15 @@ class MainActivity : Activity() {
                 lines.add("Gamepad: ${d.name} (VID=%04X PID=%04X)".format(d.vendorId, d.productId))
             }
         }
-        controllerStatus.text = if (lines.isEmpty()) "No USB peripherals or Android gamepads detected." else lines.joinToString("\n")
+        val pairedSteamNames = if (Build.VERSION.SDK_INT < 31 ||
+            checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED) {
+            try {
+                (getSystemService(BLUETOOTH_SERVICE) as? BluetoothManager)?.adapter?.bondedDevices
+                    ?.mapNotNull { it.name }?.filter { it.contains("Steam", ignoreCase = true) }.orEmpty()
+            } catch (_: SecurityException) { emptyList() }
+        } else emptyList()
+        pairedSteamNames.forEach { lines.add("Bluetooth paired: $it (paired does not guarantee connected HID output)") }
+        controllerStatus.text = if (lines.isEmpty()) "No USB peripherals, Steam Bluetooth pairings, or Android gamepads detected." else lines.joinToString("\n")
     }
 
     @Deprecated("Simple document picker for Android 8+")
