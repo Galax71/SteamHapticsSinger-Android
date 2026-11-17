@@ -519,7 +519,6 @@ class MainActivity : Activity() {
     private fun autoDetectController() {
         // Detection does not claim that a Bluetooth HID connection supports
         // the vendor-specific musical note command.
-        val usb = getSystemService(USB_SERVICE) as UsbManager
         val direct = puck.directControllers()
         val receiver = puck.receiver()
         val gamepads = InputDevice.getDeviceIds().asList().mapNotNull { id: Int -> InputDevice.getDevice(id) }
@@ -527,7 +526,8 @@ class MainActivity : Activity() {
                 (it.sources and InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK }
         val bluetoothAllowed = Build.VERSION.SDK_INT < 31 ||
             checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
-        val bluetooth = getSystemService(BLUETOOTH_SERVICE) as? BluetoothManager
+        val bluetooth = if (packageManager.hasSystemFeature(PackageManager.FEATURE_BLUETOOTH))
+            getSystemService(BLUETOOTH_SERVICE) as? BluetoothManager else null
         val pairedSteam = if (bluetoothAllowed) {
             try { bluetooth?.adapter?.bondedDevices?.filter { it.name?.contains("Steam", true) == true }.orEmpty() }
             catch (_: SecurityException) { emptyList() }
@@ -567,7 +567,8 @@ class MainActivity : Activity() {
             if (Build.VERSION.SDK_INT >= 33) registerReceiver(usbPermissionReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
             else @Suppress("DEPRECATION") registerReceiver(usbPermissionReceiver, filter)
         }
-        val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
+        val flags = PendingIntent.FLAG_UPDATE_CURRENT or
+            (if (Build.VERSION.SDK_INT >= 31) PendingIntent.FLAG_MUTABLE else 0)
         val pending = PendingIntent.getBroadcast(this, 0, Intent(puckPermissionAction).setPackage(packageName), flags)
         (getSystemService(USB_SERVICE) as UsbManager).requestPermission(device, pending)
         controllerStatus.text = "Allow USB access to the selected Steam Controller device."
@@ -597,7 +598,12 @@ class MainActivity : Activity() {
             return
         }
         try {
-            vibrator.vibrate(VibrationEffect.createOneShot(180L, 100))
+            if (Build.VERSION.SDK_INT >= 26) {
+                vibrator.vibrate(VibrationEffect.createOneShot(180L, 100))
+            } else {
+                @Suppress("DEPRECATION")
+                vibrator.vibrate(180L)
+            }
             controllerStatus.text = "Sent a 180 ms vibration request to an Android gamepad vibrator. Confirm whether the Steam Controller actually vibrated."
         } catch (e: Exception) {
             controllerStatus.text = "Gamepad vibration failed: ${e.message}"
