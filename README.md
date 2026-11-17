@@ -1,4 +1,4 @@
-# SteamHapticsSinger for Android
+﻿# SteamHapticsSinger for Android
 
 <img src="assets/shs_icon_new.svg" alt="Steam Haptics Singer logo (shs_icon_new)" width="120" height="120" />
 
@@ -8,6 +8,16 @@ Android adaptation of [SteamHapticsSinger](https://github.com/CrazyCritic89/Stea
 
 This repository is currently a standalone GitHub repository, not a GitHub-network fork of upstream. The Android port incorporates upstream BSD-3-Clause-licensed frequency tables and protocol information, with attribution and original license preserved in [LICENSE](LICENSE).
 
+## Android screenshots
+
+Screenshots captured on a Samsung Galaxy device, showing the Android app launcher, MIDI player, and Steam Controller diagnostics. These demonstrate the current interface, not verified Bluetooth musical haptic playback.
+
+| Launcher icon | MIDI player | Controller diagnostics |
+|:--:|:--:|:--:|
+| <img src="docs/screenshots/android-launcher.jpg" alt="SteamHapticsSinger app icon on Android home screen" width="180" /> | <img src="docs/screenshots/android-midi-player.jpg" alt="MIDI library and playback options" width="260" /> | <img src="docs/screenshots/android-controller.jpg" alt="Steam Controller connection and diagnostic screen" width="260" /> |
+
+Bluetooth MIDI haptics are currently marked **Coming soon**. USB-C and Steam Puck haptic output are experimental.
+
 ## Android device compatibility
 
 - **Minimum:** Android 6.0 (API 23); **target:** Android 15 (API 35). The project compiles against Android SDK 35; this does not imply it has been tested on every OS release.
@@ -15,7 +25,7 @@ This repository is currently a standalone GitHub repository, not a GitHub-networ
 - **USB:** Steam Controller 2026 direct USB-C (Valve 28DE:1302) or Steam Puck (28DE:1304) requires the device to support USB Host/OTG, a suitable data cable/adapter, and user-granted USB permission. Some devices cannot power the accessory reliably.
 - **Bluetooth:** Optional device capability; paired-device discovery only. Android 12+ requires Bluetooth Connect permission to read paired-device names, and this app does not yet request it automatically. Bluetooth MIDI haptic playback is temporarily disabled and labeled Coming soon, pending a verified working transport.
 - **No controller:** MIDI file import and phone-speaker preview can be used without USB or Bluetooth controller hardware.
-- **Android 6–7:** The gamepad vibration test uses a legacy vibration fallback; newer Android uses VibrationEffect.
+- **Android 6â€“7:** The gamepad vibration test uses a legacy vibration fallback; newer Android uses VibrationEffect.
 - **Android 12+:** USB permission PendingIntent uses the modern mutability flag; older versions omit that flag.
 - **Android 13+:** USB permission broadcast receiver uses the modern receiver registration flags.
 
@@ -48,9 +58,10 @@ Build requires Android SDK 35 and JDK 17; the build script uses the bundled setu
 
 ## Upstream credit
 
-[CrazyCritic89/SteamHapticsSinger](https://github.com/CrazyCritic89/SteamHapticsSinger) — original code and haptic frequency tables, BSD-3-Clause. Copyright (c) 2015–2016 Pila; (c) 2022–2026 Crazy, AAGaming. See [LICENSE](LICENSE).
+[CrazyCritic89/SteamHapticsSinger](https://github.com/CrazyCritic89/SteamHapticsSinger) â€” original code and haptic frequency tables, BSD-3-Clause. Copyright (c) 2015â€“2016 Pila; (c) 2022â€“2026 Crazy, AAGaming. See [LICENSE](LICENSE).
 
 
-### Bluetooth MIDI haptics — Coming soon
+### Bluetooth MIDI haptics â€” Coming soon
 
 The 2026 Steam Controller can be discovered through Bluetooth, but the experimental BLE GATT MIDI haptic output did not produce vibration during device testing. To avoid falsely reporting successful playback, Bluetooth note output and automatic BLE haptic connection are temporarily disabled. Bluetooth pairing and service diagnostics remain available. USB-C and Steam Puck remain experimental haptic transports; phone speaker playback is available only when explicitly selected. The experimental Bluetooth transport source remains in the repository for future research and is not used for MIDI playback.
+
