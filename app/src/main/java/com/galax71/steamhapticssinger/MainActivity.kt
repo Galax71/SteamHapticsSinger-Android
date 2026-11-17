@@ -265,6 +265,10 @@ class MainActivity : Activity() {
                     view.backgroundTintList = ColorStateList.valueOf(Color.rgb(86, 69, 178))
                     view.minHeight = dp(48)
                 }
+                is CheckBox -> {
+                    view.setTextColor(white)
+                    view.buttonTintList = ColorStateList.valueOf(Color.rgb(174, 158, 255))
+                }
                 is EditText -> {
                     view.setTextColor(white)
                     view.setHintTextColor(Color.LTGRAY)
@@ -383,15 +387,20 @@ class MainActivity : Activity() {
         libraryList.removeAllViews()
         val tree = folderUri()
         if (tree == null) {
-            libraryList.addView(TextView(this).apply { text = "No MIDI folder selected. Choose a folder to store songs." })
+            libraryList.addView(TextView(this).apply { text = "No MIDI folder selected. Choose a folder to store songs."; setTextColor(Color.rgb(238, 241, 250)) })
             return
         }
         try {
             val items = songs()
-            if (items.isEmpty()) libraryList.addView(TextView(this).apply { text = "Library empty. Import a MIDI file." })
+            if (items.isEmpty()) libraryList.addView(TextView(this).apply { text = "Library empty. Import a MIDI file."; setTextColor(Color.rgb(238, 241, 250)) })
             for (song in items) {
                 val row = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(0, 8, 0, 8) }
-                row.addView(TextView(this).apply { text = song.name; textSize = 17f })
+                row.addView(TextView(this).apply {
+                    text = song.name
+                    textSize = 17f
+                    setTextColor(Color.rgb(238, 241, 250))
+                    setPadding(dp(4), dp(4), dp(4), dp(8))
+                })
                 val actions = LinearLayout(this)
                 actions.addView(Button(this).apply { text = "Play"; setOnClickListener {
                     try {
@@ -418,7 +427,7 @@ class MainActivity : Activity() {
                 libraryList.addView(row)
             }
         } catch (e: Exception) {
-            libraryList.addView(TextView(this).apply { text = "Cannot read folder: ${e.message}. Choose it again." })
+            libraryList.addView(TextView(this).apply { text = "Cannot read folder: ${e.message}. Choose it again."; setTextColor(Color.rgb(238, 241, 250)) })
         }
     }
 
