@@ -201,6 +201,22 @@ class MainActivity : Activity() {
             setOnClickListener { showBluetoothControllers() }
         })
         column.addView(Button(this).apply {
+            text = "Connect Steam Controller Bluetooth haptics (experimental)"
+            setOnClickListener { controllerStatus.text = bluetoothHaptics.connect() }
+        })
+        column.addView(Button(this).apply {
+            text = "Test Bluetooth musical note (A4, 440 Hz)"
+            setOnClickListener {
+                if (!bluetoothHaptics.ready) {
+                    controllerStatus.text = bluetoothHaptics.connect() + " Wait for the BLE ready status and try again."
+                } else {
+                    val queued = bluetoothHaptics.note(2, 69)
+                    controllerStatus.text = if (queued) "BLE A4 haptic report queued (not proof of vibration). Listen for a tone." else "BLE A4 report could not be queued."
+                    if (queued) handler.postDelayed({ bluetoothHaptics.note(2, null) }, 350L)
+                }
+            }
+        })
+        column.addView(Button(this).apply {
             text = "Diagnose Steam Controller Bluetooth services"
             setOnClickListener { diagnoseSteamBluetooth() }
         })
@@ -211,7 +227,7 @@ class MainActivity : Activity() {
             }
         })
         column.addView(TextView(this).apply {
-            text = "Bluetooth can find paired controllers, but wireless musical haptic notes are not supported yet."
+            text = "Steam Controller 2026 BLE haptic output is experimental. Connect above and check the GATT status before testing MIDI."
             textSize = 13f
         })
         column.addView(Button(this).apply {
@@ -692,7 +708,7 @@ class MainActivity : Activity() {
                     paired.joinToString("\n") { device ->
                         (device.name ?: "Unnamed device") +
                             if (device.name?.contains("Steam", ignoreCase = true) == true) " [Steam candidate]" else ""
-                    } + "\nBluetooth musical haptic output is not implemented; use USB-C or Steam Puck for experimental MIDI notes."
+                    } + "\nBLE haptic output is experimental; use Connect Steam Controller Bluetooth haptics to test the writable service."
             }
         } catch (e: SecurityException) {
             controllerStatus.text = "Bluetooth permission denied: ${e.message}"
@@ -738,18 +754,18 @@ class MainActivity : Activity() {
             receiver != null ->
                 "Steam Puck detected (28DE:1304). Grant USB permission to enable MIDI haptics."
             pairedSteam.isNotEmpty() && gamepads.any { it.name.contains("Steam", true) } ->
-                "Steam Controller is paired over Bluetooth and Android exposes a Steam gamepad input device. Input is available; wireless musical HID output is not implemented."
+                "Steam Controller is paired over Bluetooth and Android exposes a Steam gamepad input device. BLE GATT haptic connection is being attempted; check connection status."
             pairedSteam.isNotEmpty() ->
-                "Steam Controller paired over Bluetooth, but no matching active Android gamepad input device was detected. Bluetooth musical HID output is not implemented."
+                "Steam Controller paired over Bluetooth, but no matching active Android gamepad input device was detected. BLE GATT haptic connection is being attempted; check connection status."
             gamepads.isNotEmpty() ->
                 "Android gamepad found: ${gamepads.first().name}. MIDI pitch output is not available over Android's generic vibrator API."
             else -> "No supported Steam Controller connection detected."
         }
         // Never switch to phone audio automatically. The user must explicitly select it.
         // USB-C/Puck are experimental; Bluetooth pairing is detected but musical output
-        // is not implemented, so keep the controller preference without claiming playback.
-        outputStatus.text = info + if (midiOutputMode == 0) "\\nOutput: Phone speaker (selected by user)." else "\\nOutput: Controller haptics preferred. USB-C/Puck experimental; Bluetooth MIDI haptics unavailable."
-        controllerStatus.text = info
+        // is experimental, so keep the controller preference without claiming playback.
+        outputStatus.text = info + if (midiOutputMode == 0) "\\nOutput: Phone speaker (selected by user)." else "\\nOutput: Controller haptics preferred. USB-C/Puck and BLE GATT are experimental."
+        if (!bluetoothHaptics.ready || direct.isNotEmpty() || receiver != null) controllerStatus.text = info
     }
 
     private fun connectPuck() {
