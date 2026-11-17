@@ -13,7 +13,7 @@ This repository is currently a standalone GitHub repository, not a GitHub-networ
 - **Minimum:** Android 6.0 (API 23); **target:** Android 15 (API 35). The project compiles against Android SDK 35; this does not imply it has been tested on every OS release.
 - **Device types:** Android phones, tablets, foldables, and larger-screen devices. The app uses scrollable Android framework layouts and the system document picker; landscape, unusual screen sizes and accessibility settings still need testing.
 - **USB:** Steam Controller 2026 direct USB-C (Valve 28DE:1302) or Steam Puck (28DE:1304) requires the device to support USB Host/OTG, a suitable data cable/adapter, and user-granted USB permission. Some devices cannot power the accessory reliably.
-- **Bluetooth:** Optional device capability; paired-device discovery only. Android 12+ requires Bluetooth Connect permission to read paired-device names, and this app does not yet request it automatically. Bluetooth musical haptic playback is not available.
+- **Bluetooth:** Optional device capability; paired-device discovery only. Android 12+ requires Bluetooth Connect permission to read paired-device names, and this app does not yet request it automatically. Bluetooth MIDI haptic playback is temporarily disabled and labeled Coming soon, pending a verified working transport.
 - **No controller:** MIDI file import and phone-speaker preview can be used without USB or Bluetooth controller hardware.
 - **Android 6–7:** The gamepad vibration test uses a legacy vibration fallback; newer Android uses VibrationEffect.
 - **Android 12+:** USB permission PendingIntent uses the modern mutability flag; older versions omit that flag.
@@ -32,7 +32,7 @@ This repository is currently a standalone GitHub repository, not a GitHub-networ
 
 ## Known limitations
 
-Direct USB-C (28DE:1302) and Steam Puck (28DE:1304) both have experimental HID note sending, but neither is verified on Android hardware. Bluetooth musical haptics remain **unimplemented**: Android's normal Bluetooth gamepad input/vibration APIs do not expose a proven frequency-note HID output channel. A paired device does not necessarily indicate an active Bluetooth connection. Hardware sound fidelity and compatibility have not been verified. This app is not affiliated with Valve.
+Direct USB-C (28DE:1302) and Steam Puck (28DE:1304) both have experimental HID note sending, but neither is verified on Android hardware. Bluetooth musical haptics are **temporarily disabled (Coming soon)**: Android's normal Bluetooth gamepad input/vibration APIs do not expose a proven frequency-note HID output channel. A paired device does not necessarily indicate an active Bluetooth connection. Hardware sound fidelity and compatibility have not been verified. This app is not affiliated with Valve.
 
 ## Build
 
@@ -49,3 +49,8 @@ Build requires Android SDK 35 and JDK 17; the build script uses the bundled setu
 ## Upstream credit
 
 [CrazyCritic89/SteamHapticsSinger](https://github.com/CrazyCritic89/SteamHapticsSinger) — original code and haptic frequency tables, BSD-3-Clause. Copyright (c) 2015–2016 Pila; (c) 2022–2026 Crazy, AAGaming. See [LICENSE](LICENSE).
+
+
+### Bluetooth MIDI haptics — Coming soon
+
+The 2026 Steam Controller can be discovered through Bluetooth, but the experimental BLE GATT MIDI haptic output did not produce vibration during device testing. To avoid falsely reporting successful playback, Bluetooth note output and automatic BLE haptic connection are temporarily disabled. Bluetooth pairing and service diagnostics remain available. USB-C and Steam Puck remain experimental haptic transports; phone speaker playback is available only when explicitly selected. The experimental Bluetooth transport source remains in the repository for future research and is not used for MIDI playback.
