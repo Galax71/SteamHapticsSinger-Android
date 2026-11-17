@@ -36,6 +36,8 @@ class SteamBluetoothHaptics(private val context: Context, private val status: (S
     @Volatile private var connecting = false
     private var busy = false
     private var lastWrite = 0L
+    @Volatile var lastWriteStatus: String = "No Bluetooth haptic report written"
+        private set
     private val trackpad = intArrayOf(0, 9, 9, 10, 10, 11, 12, 12, 13, 14, 15, 15, 16, 17, 18, 19, 21, 22, 23, 24, 26, 28, 29, 31, 33, 35, 37, 39, 41, 44, 46, 49, 52, 55, 58, 62, 65, 69, 73, 78, 82, 87, 92, 98, 104, 110, 117, 123, 131, 139, 147, 156, 165, 175, 185, 196, 208, 220, 233, 247, 261, 276, 293, 310, 328, 349, 369, 391, 414, 439, 466, 493, 522, 552, 584, 621, 658, 696, 738, 781, 828, 877, 929, 985, 1043, 1105, 1171, 1240, 1314, 1392, 1475, 1562, 1655, 1754, 1858, 1969, 2085, 2209, 2340, 2480, 2627, 2784, 2949, 3124, 3311, 3507, 3716, 3938, 4173, 4422, 4686, 4965, 5261, 5575, 5907, 6259, 6632, 7027, 7446, 7889, 8359, 8857, 9384, 9943, 10535, 11162, 11827, 12531)
     private val grip = intArrayOf(0, 10, 10, 11, 11, 12, 13, 13, 14, 15, 16, 16, 17, 18, 19, 20, 22, 23, 24, 25, 27, 29, 30, 32, 34, 36, 38, 40, 42, 45, 47, 50, 53, 56, 59, 63, 66, 70, 75, 80, 84, 89, 94, 100, 107, 113, 120, 126, 134, 142, 151, 160, 169, 179, 189, 200, 213, 226, 239, 253, 267, 283, 300, 318, 336, 357, 377, 399, 423, 449, 477, 505, 535, 566, 598, 636, 674, 713, 756, 800, 848, 898, 951, 1008, 1068, 1131, 1199, 1270, 1345, 1425, 1510, 1600, 1693, 1792, 1897, 2008, 2125, 2249, 2381, 2521, 2669, 2826, 2992, 3168, 3354, 3552, 3761, 3983, 4218, 4467, 4731, 5010, 5306, 5620, 5952, 6304, 6677, 7072, 7491, 7934, 8404, 8902, 9429, 9988, 10580, 11207, 11872, 12576)
 
@@ -85,7 +87,8 @@ class SteamBluetoothHaptics(private val context: Context, private val status: (S
         }
         override fun onCharacteristicWrite(g: BluetoothGatt, ch: BluetoothGattCharacteristic, statusCode: Int) {
             synchronized(lock) { busy = false }
-            if (statusCode != BluetoothGatt.GATT_SUCCESS) report("Bluetooth haptic write failed: GATT $statusCode")
+            lastWriteStatus = if (statusCode == BluetoothGatt.GATT_SUCCESS) "BLE characteristic write acknowledged by Android (physical haptics not confirmed)" else "Bluetooth haptic write failed: GATT $statusCode"
+            report(lastWriteStatus)
             main.post { drain() }
         }
     }
@@ -95,16 +98,17 @@ class SteamBluetoothHaptics(private val context: Context, private val status: (S
     fun note(channel: Int, pitch: Int?, velocity: Int = 64, gainDb: Int = -3, swap: Boolean = false): Boolean {
         if (!ready || channel !in 0..3 || (pitch != null && pitch !in 0..127)) return false
         val actuator = (if (swap) intArrayOf(1, 0, 4, 3) else intArrayOf(4, 3, 1, 0))[channel]
-        val packet = ByteArray(10)
+        val packet = ByteArray(64)
         packet[0] = 0x83.toByte()
         packet[1] = actuator.toByte()
         if (pitch == null) {
             packet[2] = 0x80.toByte()
+            packet[6] = 0x80.toByte()
         } else {
             val hz = if (actuator > 2) grip[pitch] else trackpad[pitch]
             packet[2] = gainDb.coerceIn(-35, 0).toByte()
-            packet[3] = (hz and 255).toByte()
-            packet[4] = (hz shr 8).toByte()
+            packet[3] = (hz % 0xff).toByte()
+            packet[4] = (hz / 0xff).toByte()
             packet[5] = 0xff.toByte()
             packet[6] = 0x7f.toByte()
         }
@@ -144,7 +148,8 @@ class SteamBluetoothHaptics(private val context: Context, private val status: (S
             lastWrite = now
             if (!result) {
                 synchronized(lock) { busy = false }
-                report("BLE output report rejected by Android")
+                lastWriteStatus = "BLE output report rejected by Android"
+                report(lastWriteStatus)
             }
         } catch (e: Exception) {
             synchronized(lock) { busy = false }
