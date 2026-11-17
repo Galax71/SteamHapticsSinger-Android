@@ -34,22 +34,24 @@ class SteamPuckHaptics(context: Context) {
     // Product IDs other than the known Puck are discovered but not assumed to
     // support the Puck's private 0x83 report without protocol verification.
     fun directControllers(): List<UsbDevice> = usb.deviceList.values.filter {
-        it.vendorId == 0x28de && it.productId != 0x1304
+        it.vendorId == 0x28de && it.productId == 0x1302
     }
     fun receiver(): UsbDevice? = usb.deviceList.values.firstOrNull {
         it.vendorId == 0x28de && it.productId == 0x1304
     }
+    fun preferredDevice(): UsbDevice? = directControllers().firstOrNull() ?: receiver()
+    fun selectedTransport(): String = when (device?.productId) { 0x1302 -> "Direct USB-C"; 0x1304 -> "Steam Puck USB"; else -> "Disconnected" }
     fun connectionSummary(): String = when {
         directControllers().isNotEmpty() -> "Direct Valve USB device detected (haptic protocol not verified)"
         receiver() != null -> "Steam Puck USB receiver detected"
         else -> "No Valve USB device detected"
     }
 
-    fun hasPermission(): Boolean = receiver()?.let(usb::hasPermission) == true
+    fun hasPermission(): Boolean = preferredDevice()?.let(usb::hasPermission) == true
 
     @Synchronized fun connect(): String {
         close()
-        val puck = receiver() ?: return "Steam Controller Puck not detected"
+        val puck = preferredDevice() ?: return "No supported Steam Controller USB device detected (0x1302 or 0x1304)"
         if (!usb.hasPermission(puck)) return "USB permission required"
         val candidates = (0 until puck.interfaceCount).map { puck.getInterface(it) }
             .filter { it.interfaceClass == UsbConstants.USB_CLASS_HID }
@@ -57,14 +59,14 @@ class SteamPuckHaptics(context: Context) {
             val ep = (0 until candidate.endpointCount).map { candidate.getEndpoint(it) }
                 .firstOrNull { it.direction == UsbConstants.USB_DIR_OUT && it.type == UsbConstants.USB_ENDPOINT_XFER_INT }
                 ?: continue
-            val handle = usb.openDevice(puck) ?: return "Android could not open the Puck"
+            val handle = usb.openDevice(puck) ?: return "Android could not open the selected USB device"
             if (handle.claimInterface(candidate, true)) {
                 connection = handle; face = candidate; output = ep; device = puck
-                return "Connected to Puck HID interface ${candidate.id} (experimental output)"
+                return "Connected to ${if (puck.productId == 0x1302) "direct Steam Controller" else "Steam Puck"} HID interface ${candidate.id} (experimental output)"
             }
             handle.close()
         }
-        return "No accessible HID interrupt OUT endpoint found on the Puck"
+        return "No accessible HID interrupt OUT endpoint found on selected USB device"
     }
 
     @Synchronized fun rumble(left: Int, right: Int): Boolean {
