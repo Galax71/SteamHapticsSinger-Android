@@ -183,6 +183,20 @@ class MainActivity : Activity() {
             setOnClickListener { scanControllers() }
         })
         column.addView(Button(this).apply {
+            text = "Bluetooth: find paired Steam Controllers"
+            setOnClickListener { showBluetoothControllers() }
+        })
+        column.addView(Button(this).apply {
+            text = "Open Bluetooth pairing settings"
+            setOnClickListener {
+                startActivity(Intent(android.provider.Settings.ACTION_BLUETOOTH_SETTINGS))
+            }
+        })
+        column.addView(TextView(this).apply {
+            text = "Bluetooth can find paired controllers, but wireless musical haptic notes are not supported yet."
+            textSize = 13f
+        })
+        column.addView(Button(this).apply {
             text = "Connect Steam Controller (USB-C / Puck)"
             setOnClickListener { connectPuck() }
         })
@@ -522,6 +536,51 @@ class MainActivity : Activity() {
         super.onResume()
         if (::outputStatus.isInitialized && ::controllerStatus.isInitialized) {
             handler.post { autoDetectController() }
+        }
+    }
+
+    private fun showBluetoothControllers() {
+        if (!packageManager.hasSystemFeature(PackageManager.FEATURE_BLUETOOTH)) {
+            controllerStatus.text = "This device does not have Bluetooth hardware."
+            return
+        }
+        if (Build.VERSION.SDK_INT >= 31 &&
+            checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(Manifest.permission.BLUETOOTH_CONNECT), 2201)
+            controllerStatus.text = "Bluetooth permission requested. Please allow Nearby devices access, then scan again."
+            return
+        }
+        try {
+            val manager = getSystemService(BLUETOOTH_SERVICE) as? BluetoothManager
+            val adapter = manager?.adapter
+            if (adapter == null) {
+                controllerStatus.text = "Bluetooth adapter unavailable."
+                return
+            }
+            if (!adapter.isEnabled) {
+                controllerStatus.text = "Bluetooth is turned off. Enable it in Bluetooth settings, then scan again."
+                return
+            }
+            val paired = adapter.bondedDevices.orEmpty().sortedBy { it.name ?: "" }
+            controllerStatus.text = if (paired.isEmpty()) {
+                "No paired Bluetooth devices found. Use Open Bluetooth pairing settings first."
+            } else {
+                "Paired Bluetooth devices (pairing does not prove active connection):\\n" +
+                    paired.joinToString("\\n") { device ->
+                        (device.name ?: "Unnamed device") +
+                            if (device.name?.contains("Steam", ignoreCase = true) == true) " [Steam candidate]" else ""
+                    } + "\\nBluetooth musical haptic output is not implemented; use USB-C or Steam Puck for experimental MIDI notes."
+            }
+        } catch (e: SecurityException) {
+            controllerStatus.text = "Bluetooth permission denied: ${e.message}"
+        }
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 2201) {
+            if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) showBluetoothControllers()
+            else controllerStatus.text = "Bluetooth Nearby devices permission denied. USB-C and phone audio remain available."
         }
     }
 
