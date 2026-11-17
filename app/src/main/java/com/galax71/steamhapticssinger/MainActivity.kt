@@ -44,7 +44,7 @@ class MainActivity : Activity() {
     private var playbackSession = 0
     private var controllerHapticsEnabled = true
     private var lastHapticErrorShown = false
-    private var midiOutputMode = 0
+    private var midiOutputMode = 1
     private lateinit var outputSelector: RadioGroup
     private var outputModeChosenManually = false
     private var repeatMidiPlayback = false
@@ -90,7 +90,7 @@ class MainActivity : Activity() {
                 textSize = 16f
             })
         }
-        outputSelector.check(5100)
+        outputSelector.check(5101)
         column.addView(outputSelector)
         outputStatus = TextView(this).apply {
             text = "Steam Controller haptics selected. Direct USB-C or Puck supported experimentally."
@@ -732,18 +732,10 @@ class MainActivity : Activity() {
                 "Android gamepad found: ${gamepads.first().name}. MIDI pitch output is not available over Android's generic vibrator API."
             else -> "No supported Steam Controller connection detected."
         }
-        // Automatically choose an output only when a verified USB-capable path exists.
-        // Bluetooth pairing alone cannot drive Steam musical haptics.
-        if (::outputSelector.isInitialized && !outputModeChosenManually) {
-            val usbReady = (direct.isNotEmpty() || receiver != null) && puck.hasPermission() &&
-                puck.connect().startsWith("Connected", ignoreCase = true)
-            val desiredMode = if (usbReady) 1 else 0
-            if (midiOutputMode != desiredMode) {
-                outputSelector.check(5100 + desiredMode)
-                outputModeChosenManually = false
-            }
-        }
-        outputStatus.text = info + if (midiOutputMode == 0) "\\nOutput: Phone speaker (automatic safe fallback)." else "\\nOutput: Controller haptics (USB experimental)."
+        // Never switch to phone audio automatically. The user must explicitly select it.
+        // USB-C/Puck are experimental; Bluetooth pairing is detected but musical output
+        // is not implemented, so keep the controller preference without claiming playback.
+        outputStatus.text = info + if (midiOutputMode == 0) "\\nOutput: Phone speaker (selected by user)." else "\\nOutput: Controller haptics preferred. USB-C/Puck experimental; Bluetooth MIDI haptics unavailable."
         controllerStatus.text = info
     }
 
