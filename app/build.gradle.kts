@@ -7,10 +7,10 @@ android {
     compileSdk = 35
     defaultConfig {
         applicationId = "com.galax71.steamhapticssinger"
-        minSdk = 26
+        minSdk = 23
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.4-android-port"
+        versionCode = 2
+        versionName = "1.6-device-compat"
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
