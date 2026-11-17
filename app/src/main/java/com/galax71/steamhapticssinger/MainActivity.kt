@@ -522,7 +522,7 @@ class MainActivity : Activity() {
         val usb = getSystemService(USB_SERVICE) as UsbManager
         val direct = puck.directControllers()
         val receiver = puck.receiver()
-        val gamepads = InputDevice.getDeviceIds().mapNotNull { InputDevice.getDevice(it) }
+        val gamepads = InputDevice.getDeviceIds().asList().mapNotNull { id: Int -> InputDevice.getDevice(id) }
             .filter { (it.sources and InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD ||
                 (it.sources and InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK }
         val bluetoothAllowed = Build.VERSION.SDK_INT < 31 ||
