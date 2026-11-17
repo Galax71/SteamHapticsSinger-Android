@@ -509,6 +509,13 @@ class MainActivity : Activity() {
         refreshLibrary()
     }
 
+    override fun onResume() {
+        super.onResume()
+        if (::outputStatus.isInitialized && ::controllerStatus.isInitialized) {
+            handler.post { autoDetectController() }
+        }
+    }
+
     private fun autoDetectController() {
         // Detection does not claim that a Bluetooth HID connection supports
         // the vendor-specific musical note command.
