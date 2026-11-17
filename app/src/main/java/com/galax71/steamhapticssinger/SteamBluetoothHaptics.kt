@@ -36,6 +36,8 @@ class SteamBluetoothHaptics(private val context: Context, private val status: (S
     @Volatile private var connecting = false
     private var busy = false
     private var lastWrite = 0L
+    private var writeSequence = 0L
+    private var pendingSequence = 0L
     @Volatile private var negotiatedMtu = 23
     @Volatile var lastWriteStatus: String = "No Bluetooth haptic report written"
         private set
@@ -94,7 +96,7 @@ class SteamBluetoothHaptics(private val context: Context, private val status: (S
             report("BLE negotiated MTU: $negotiatedMtu (64-byte writes require at least 67).")
         }
         override fun onCharacteristicWrite(g: BluetoothGatt, ch: BluetoothGattCharacteristic, statusCode: Int) {
-            synchronized(lock) { busy = false }
+            synchronized(lock) { busy = false; pendingSequence = 0L }
             lastWriteStatus = if (statusCode == BluetoothGatt.GATT_SUCCESS) "BLE characteristic write acknowledged by Android (physical haptics not confirmed)" else "Bluetooth haptic write failed: GATT $statusCode"
             report(lastWriteStatus)
             main.post { drain() }
@@ -146,13 +148,22 @@ class SteamBluetoothHaptics(private val context: Context, private val status: (S
         val packet = synchronized(lock) {
             if (busy || queue.isEmpty()) null else {
                 busy = true
+                pendingSequence = ++writeSequence
                 queue.removeFirst()
             }
         } ?: return
+        val sequence = synchronized(lock) { pendingSequence }
+        lastWriteStatus = "BLE write submitting (request #$sequence)..."
+        report(lastWriteStatus)
         try {
+            val writeType = if (ch.properties and BluetoothGattCharacteristic.PROPERTY_WRITE != 0)
+                BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+            else BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
             val result = if (Build.VERSION.SDK_INT >= 33) {
-                g.writeCharacteristic(ch, packet, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT) == android.bluetooth.BluetoothStatusCodes.SUCCESS
+                g.writeCharacteristic(ch, packet, writeType) == android.bluetooth.BluetoothStatusCodes.SUCCESS
             } else {
+                @Suppress("DEPRECATION")
+                ch.writeType = writeType
                 @Suppress("DEPRECATION")
                 ch.value = packet
                 @Suppress("DEPRECATION")
@@ -160,22 +171,33 @@ class SteamBluetoothHaptics(private val context: Context, private val status: (S
             }
             lastWrite = now
             if (result) {
-                lastWriteStatus = "BLE write submitted; awaiting GATT acknowledgement."
-                report(lastWriteStatus)
-                main.postDelayed({
-                    if (lastWriteStatus == "BLE write submitted; awaiting GATT acknowledgement.") {
-                        lastWriteStatus = "BLE write timed out waiting for acknowledgement."
-                        report(lastWriteStatus)
-                    }
-                }, 2500L)
+                val stillPending = synchronized(lock) { busy && pendingSequence == sequence }
+                if (stillPending) {
+                    lastWriteStatus = "BLE write submitted (#$sequence); awaiting callback (not proof of vibration)."
+                    report(lastWriteStatus)
+                    main.postDelayed({
+                        val timedOut = synchronized(lock) {
+                            if (busy && pendingSequence == sequence) {
+                                busy = false
+                                pendingSequence = 0L
+                                queue.clear()
+                                true
+                            } else false
+                        }
+                        if (timedOut) {
+                            lastWriteStatus = "BLE write #$sequence timed out: no GATT callback after 5 seconds. MIDI queue cleared."
+                            report(lastWriteStatus)
+                        }
+                    }, 5000L)
+                }
             }
             if (!result) {
-                synchronized(lock) { busy = false }
+                synchronized(lock) { busy = false; pendingSequence = 0L }
                 lastWriteStatus = "BLE output report rejected by Android"
                 report(lastWriteStatus)
             }
         } catch (e: Exception) {
-            synchronized(lock) { busy = false }
+            synchronized(lock) { busy = false; pendingSequence = 0L }
             lastWriteStatus = "BLE haptic output failed: ${e.message}"
             report(lastWriteStatus)
         }
