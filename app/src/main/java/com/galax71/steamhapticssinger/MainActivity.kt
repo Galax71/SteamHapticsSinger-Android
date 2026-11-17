@@ -50,6 +50,10 @@ class MainActivity : Activity() {
     private var repeatMidiPlayback = false
     private var limitHapticsToTwoChannels = false
     private val puck by lazy { SteamPuckHaptics(this) }
+    private val bluetoothHaptics by lazy { SteamBluetoothHaptics(this) { message ->
+        if (::controllerStatus.isInitialized) controllerStatus.text = message
+        if (::outputStatus.isInitialized) outputStatus.text = message
+    } }
     private val puckPermissionAction = "com.galax71.steamhapticssinger.USB_PERMISSION"
     private var usbPermissionReceiver: BroadcastReceiver? = null
     private var usbPermissionRequestedFor: String? = null
@@ -482,6 +486,13 @@ class MainActivity : Activity() {
 
     private fun playWithNotes(song: MidiSong, filename: String) {
         if (midiOutputMode != 0) {
+            if (puck.preferredDevice() == null && bluetoothHaptics.ready) {
+                // Bluetooth is already connected and has a writable Valve GATT output.
+            } else if (puck.preferredDevice() == null) {
+                val state = bluetoothHaptics.connect()
+                midiStatus.text = "$state Open the Controller tab and wait for BLE ready, then press Play again. Phone audio will not be used automatically."
+                return
+            } else {
             if (puck.preferredDevice() == null) {
                 midiStatus.text = "No supported USB haptic transport is connected. Bluetooth gamepad pairing does not provide musical haptic output. Choose Phone speaker to play MIDI."
                 return
@@ -495,6 +506,7 @@ class MainActivity : Activity() {
             if (!connected.startsWith("Connected")) {
                 midiStatus.text = "USB controller connection failed: $connected"
                 return
+            }
             }
         }
         lastHapticErrorShown = false
@@ -715,7 +727,12 @@ class MainActivity : Activity() {
             try { bluetooth?.adapter?.bondedDevices?.filter { it.name?.contains("Steam", true) == true }.orEmpty() }
             catch (_: SecurityException) { emptyList() }
         } else emptyList()
+        if (direct.isEmpty() && receiver == null && pairedSteam.isNotEmpty() && !bluetoothHaptics.ready) {
+            bluetoothHaptics.connect()
+        }
         val info = when {
+            bluetoothHaptics.ready && direct.isEmpty() && receiver == null ->
+                "Steam Controller 2026 BLE output ready (experimental 0x83 MIDI haptics)."
             direct.isNotEmpty() && puck.hasPermission() ->
                 "Direct USB-C Steam Controller (28DE:1302) selected. " + puck.connect()
             direct.isNotEmpty() ->
@@ -818,15 +835,18 @@ class MainActivity : Activity() {
         if (event.on) {
             // Replace a note only on its assigned actuator; sending note-off
             // before a new note avoids a stuck/drifting actuator.
-            val success = puck.note(channel, event.note, event.velocity)
+            val success = if (puck.preferredDevice() == null && bluetoothHaptics.ready)
+                bluetoothHaptics.note(channel, event.note, event.velocity, puck.musicGain, puck.swapTrackpadAndRumble)
+                else puck.note(channel, event.note, event.velocity)
             hapticNotes[channel] = if (success) event.note else -1
             if (!success && !lastHapticErrorShown) {
                 lastHapticErrorShown = true
-                handler.post { outputStatus.text = "Puck 0x83 note output failed; reconnect USB." }
+                handler.post { outputStatus.text = "Controller 0x83 note could not be queued; check USB or Bluetooth transport." }
             }
         } else if (previousNote == event.note) {
             // An old note-off must not silence a newer note on this channel.
-            puck.note(channel, null)
+            if (puck.preferredDevice() == null && bluetoothHaptics.ready) bluetoothHaptics.note(channel, null)
+            else puck.note(channel, null)
             hapticNotes[channel] = -1
         }
     }
@@ -834,6 +854,7 @@ class MainActivity : Activity() {
     private fun stopControllerNotes() {
         for (i in hapticNotes.indices) hapticNotes[i] = -1
         puck.stopNotes()
+        bluetoothHaptics.stop()
     }
 
     private fun scanControllers() {
