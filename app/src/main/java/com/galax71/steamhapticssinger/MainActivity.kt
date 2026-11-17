@@ -493,20 +493,16 @@ class MainActivity : Activity() {
                 midiStatus.text = "$state Open the Controller tab and wait for BLE ready, then press Play again. Phone audio will not be used automatically."
                 return
             } else {
-            if (puck.preferredDevice() == null) {
-                midiStatus.text = "No supported USB haptic transport is connected. Bluetooth gamepad pairing does not provide musical haptic output. Choose Phone speaker to play MIDI."
-                return
-            }
-            if (!puck.hasPermission()) {
-                connectPuck()
-                midiStatus.text = "Grant USB access to the connected Steam Controller and press Play again."
-                return
-            }
-            val connected = puck.connect()
-            if (!connected.startsWith("Connected")) {
-                midiStatus.text = "USB controller connection failed: $connected"
-                return
-            }
+                if (!puck.hasPermission()) {
+                    connectPuck()
+                    midiStatus.text = "Grant USB access to the connected Steam Controller and press Play again."
+                    return
+                }
+                val connected = puck.connect()
+                if (!connected.startsWith("Connected")) {
+                    midiStatus.text = "USB controller connection failed: $connected"
+                    return
+                }
             }
         }
         lastHapticErrorShown = false
@@ -922,6 +918,7 @@ class MainActivity : Activity() {
         player.stop()
         cancelControllerVibration()
         puck.close()
+        bluetoothHaptics.close()
         usbPermissionReceiver?.let { try { unregisterReceiver(it) } catch (_: Exception) {} }
         super.onDestroy()
     }
