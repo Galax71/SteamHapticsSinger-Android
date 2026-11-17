@@ -2,7 +2,7 @@
 [CmdletBinding()]
 param(
   [ValidatePattern('^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$')]
-  [string]$Version = '1.4-android-port',
+  [string]$Version = '1.6',
   [switch]$SkipPublish
 )
 $ErrorActionPreference = 'Stop'
@@ -25,7 +25,7 @@ try {
   if (-not (Test-Path $apk)) { throw "Build did not produce APK: $apk" }
   $destination = Join-Path $root 'dist'
   New-Item -ItemType Directory -Path $destination -Force | Out-Null
-  $filename = "SteamHapticsSinger-Android-$Version-debug.apk"
+  $filename = "SteamHapticsSinger-Android-Version-$Version.apk"
   $output = Join-Path $destination $filename
   Copy-Item $apk $output -Force
   $sha = (Get-FileHash $output -Algorithm SHA256).Hash
@@ -41,7 +41,7 @@ try {
     if ($LASTEXITCODE -eq 0) {
       & gh release upload $tag $output --repo $repo --clobber
     } else {
-      & gh release create $tag $output --repo $repo --target main --title "SteamHapticsSinger Android $Version (experimental)" --notes "Experimental Android port. Haptic playback is unverified; direct USB and Bluetooth note output are not yet implemented." --prerelease --latest=false
+      & gh release create $tag $output --repo $repo --target main --title "SteamHapticsSinger Android $Version (experimental)" --notes "Experimental Android port. Haptic playback is unverified; USB note output is experimental and Bluetooth musical note output is not yet implemented." --prerelease --latest=false
     }
     Assert-Ok 'Publish GitHub prerelease'
     Write-Host "Release: https://github.com/$repo/releases/tag/$tag"
