@@ -33,6 +33,7 @@ class SteamBluetoothHaptics(private val context: Context, private val status: (S
     private var characteristic: BluetoothGattCharacteristic? = null
     @Volatile var ready: Boolean = false
         private set
+    @Volatile private var connecting = false
     private var busy = false
     private var lastWrite = 0L
     private val trackpad = intArrayOf(0, 9, 9, 10, 10, 11, 12, 12, 13, 14, 15, 15, 16, 17, 18, 19, 21, 22, 23, 24, 26, 28, 29, 31, 33, 35, 37, 39, 41, 44, 46, 49, 52, 55, 58, 62, 65, 69, 73, 78, 82, 87, 92, 98, 104, 110, 117, 123, 131, 139, 147, 156, 165, 175, 185, 196, 208, 220, 233, 247, 261, 276, 293, 310, 328, 349, 369, 391, 414, 439, 466, 493, 522, 552, 584, 621, 658, 696, 738, 781, 828, 877, 929, 985, 1043, 1105, 1171, 1240, 1314, 1392, 1475, 1562, 1655, 1754, 1858, 1969, 2085, 2209, 2340, 2480, 2627, 2784, 2949, 3124, 3311, 3507, 3716, 3938, 4173, 4422, 4686, 4965, 5261, 5575, 5907, 6259, 6632, 7027, 7446, 7889, 8359, 8857, 9384, 9943, 10535, 11162, 11827, 12531)
@@ -50,11 +51,13 @@ class SteamBluetoothHaptics(private val context: Context, private val status: (S
             adapter.bondedDevices.firstOrNull { it.name?.startsWith("Steam Ctrl (BT)", true) == true }
         } catch (_: SecurityException) { null } ?: return "No paired Steam Controller 2026 found"
         if (ready) return "Bluetooth haptic GATT ready"
+        if (connecting) return "Bluetooth haptic connection in progress"
         close()
         return try {
+            connecting = true
             gatt = target.connectGatt(context, false, callback, BluetoothDevice.TRANSPORT_LE)
             "Connecting to Steam Controller 2026 BLE haptic service..."
-        } catch (e: Exception) { "Bluetooth GATT connection failed: ${e.message}" }
+        } catch (e: Exception) { connecting = false; "Bluetooth GATT connection failed: ${e.message}" }
     }
 
     private val callback = object : BluetoothGattCallback() {
@@ -63,11 +66,13 @@ class SteamBluetoothHaptics(private val context: Context, private val status: (S
                 try { if (!g.discoverServices()) report("BLE connected but discovery could not start") }
                 catch (e: Exception) { report("BLE discovery failed: ${e.message}") }
             } else if (state == BluetoothProfile.STATE_DISCONNECTED || code != BluetoothGatt.GATT_SUCCESS) {
+                connecting = false
                 ready = false
                 report("Steam Controller BLE disconnected (GATT status $code)")
             }
         }
         override fun onServicesDiscovered(g: BluetoothGatt, code: Int) {
+            connecting = false
             val ch = if (code == BluetoothGatt.GATT_SUCCESS) g.getService(serviceId)?.getCharacteristic(outputId) else null
             if (ch == null || ch.properties and (BluetoothGattCharacteristic.PROPERTY_WRITE or BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE) == 0) {
                 ready = false
@@ -155,6 +160,7 @@ class SteamBluetoothHaptics(private val context: Context, private val status: (S
 
     fun close() {
         ready = false
+        connecting = false
         synchronized(lock) { queue.clear(); characteristic = null; busy = false }
         try { gatt?.disconnect() } catch (_: Exception) {}
         try { gatt?.close() } catch (_: Exception) {}
