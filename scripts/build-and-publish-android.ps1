@@ -37,8 +37,11 @@ try {
     Assert-Ok 'GitHub authentication'
     $repo = 'Galax71/SteamHapticsSinger-Android'
     $tag = "android-v$Version"
-    $existing = & gh release view $tag --repo $repo --json tagName --jq '.tagName' 2>$null
-    if ($LASTEXITCODE -eq 0) {
+    # Avoid using a failing 'gh release view' as an existence check:
+    # PowerShell can promote its stderr ('release not found') to a terminating error.
+    $existingTags = @(& gh release list --repo $repo --limit 100 --json tagName --jq '.[].tagName')
+    Assert-Ok 'List GitHub releases'
+    if ($existingTags -contains $tag) {
       & gh release upload $tag $output --repo $repo --clobber
     } else {
       & gh release create $tag $output --repo $repo --target main --title "SteamHapticsSinger Android $Version (experimental)" --notes "Experimental Android port. Haptic playback is unverified; USB note output is experimental and Bluetooth musical note output is not yet implemented." --prerelease --latest=false
