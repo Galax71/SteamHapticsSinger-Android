@@ -15,7 +15,7 @@ This repository is currently a standalone GitHub repository, not a GitHub-networ
 
 ## Known limitations
 
-Direct USB controller and Bluetooth musical haptics remain **unimplemented and unverified**; only the Steam Puck USB path has experimental note sending. Hardware sound fidelity and compatibility have not been verified on actual controller hardware. This app is not affiliated with Valve.
+Direct USB-C (28DE:1302) and Steam Puck (28DE:1304) both have experimental HID note sending, but neither is verified on Android hardware. Bluetooth musical haptics remain **unimplemented**: Android's normal Bluetooth gamepad input/vibration APIs do not expose a proven frequency-note HID output channel. A paired device does not necessarily indicate an active Bluetooth connection. Hardware sound fidelity and compatibility have not been verified. This app is not affiliated with Valve.
 
 ## Build
 
