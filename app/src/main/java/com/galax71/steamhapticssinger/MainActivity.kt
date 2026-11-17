@@ -307,7 +307,18 @@ class MainActivity : Activity() {
             setTextColor(Color.WHITE)
             setPadding(dp(18), dp(18), dp(18), dp(12))
         }
-        root.addView(heading)
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(12), dp(8), dp(12), dp(8))
+        }
+        header.addView(heading, LinearLayout.LayoutParams(0, -2, 1f))
+        header.addView(ImageView(this).apply {
+            setImageResource(R.drawable.ic_launcher_foreground)
+            contentDescription = "Steam Haptics Singer logo"
+            scaleType = ImageView.ScaleType.FIT_CENTER
+        }, LinearLayout.LayoutParams(dp(64), dp(64)))
+        root.addView(header)
         val tabs = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             setPadding(dp(12), 0, dp(12), dp(8))
