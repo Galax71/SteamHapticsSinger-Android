@@ -13,6 +13,10 @@ import android.content.res.ColorStateList
 import android.hardware.usb.UsbManager
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothManager
+import android.bluetooth.BluetoothGatt
+import android.bluetooth.BluetoothGattCallback
+import android.bluetooth.BluetoothGattCharacteristic
+import android.bluetooth.BluetoothProfile
 import android.Manifest
 import android.content.pm.PackageManager
 import android.media.AudioAttributes
@@ -48,6 +52,7 @@ class MainActivity : Activity() {
     private var usbPermissionReceiver: BroadcastReceiver? = null
     private var usbPermissionRequestedFor: String? = null
     private var startupPermissionCheckScheduled = false
+    private var diagnosticGatt: BluetoothGatt? = null
     private lateinit var outputStatus: TextView
     private var lastHapticNote = -1
     private var lastHapticAt = 0L
@@ -187,6 +192,10 @@ class MainActivity : Activity() {
         column.addView(Button(this).apply {
             text = "Bluetooth: find paired Steam Controllers"
             setOnClickListener { showBluetoothControllers() }
+        })
+        column.addView(Button(this).apply {
+            text = "Diagnose Steam Controller Bluetooth services"
+            setOnClickListener { diagnoseSteamBluetooth() }
         })
         column.addView(Button(this).apply {
             text = "Open Bluetooth pairing settings"
@@ -574,6 +583,67 @@ class MainActivity : Activity() {
             getSharedPreferences("permission_prompts", MODE_PRIVATE).edit()
                 .putBoolean("bluetooth_requested", true).apply()
             requestPermissions(arrayOf(Manifest.permission.BLUETOOTH_CONNECT), 2201)
+        }
+    }
+
+    private fun diagnoseSteamBluetooth() {
+        if (Build.VERSION.SDK_INT >= 31 &&
+            checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(Manifest.permission.BLUETOOTH_CONNECT), 2201)
+            controllerStatus.text = "Allow Nearby devices permission, then retry Bluetooth diagnostics."
+            return
+        }
+        try {
+            val adapter = (getSystemService(BLUETOOTH_SERVICE) as? BluetoothManager)?.adapter
+            if (adapter == null || !adapter.isEnabled) {
+                controllerStatus.text = "Enable Bluetooth and connect the controller in Android settings first."
+                return
+            }
+            val candidate = adapter.bondedDevices.firstOrNull {
+                it.name?.contains("Steam", ignoreCase = true) == true
+            }
+            if (candidate == null) {
+                controllerStatus.text = "No paired Steam Controller found. Pair it in Bluetooth settings first."
+                return
+            }
+            diagnosticGatt?.close()
+            diagnosticGatt = null
+            controllerStatus.text = "Checking whether ${candidate.name} exposes BLE GATT services. Classic Bluetooth HID devices may not support this connection."
+            diagnosticGatt = candidate.connectGatt(this, false, object : BluetoothGattCallback() {
+                override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
+                    if (status == BluetoothGatt.GATT_SUCCESS && newState == BluetoothProfile.STATE_CONNECTED) {
+                        try {
+                            if (!gatt.discoverServices()) {
+                                runOnUiThread { controllerStatus.text = "BLE connected, but service discovery could not start. Bluetooth HID musical output remains unsupported." }
+                                gatt.close()
+                            }
+                        } catch (e: SecurityException) {
+                            runOnUiThread { controllerStatus.text = "BLE discovery permission error: ${e.message}" }
+                            gatt.close()
+                        }
+                    } else if (newState == BluetoothProfile.STATE_DISCONNECTED || status != BluetoothGatt.GATT_SUCCESS) {
+                        runOnUiThread {
+                            controllerStatus.text = "BLE GATT unavailable (status $status). This may be a Classic Bluetooth HID controller; Android's public APIs do not provide arbitrary HID output reports. Paired gamepad input is not enough for musical haptics."
+                        }
+                        gatt.close()
+                    }
+                }
+                override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
+                    val summary = if (status == BluetoothGatt.GATT_SUCCESS) {
+                        gatt.services.joinToString("\\n") { service ->
+                            "${service.uuid}: " + service.characteristics.joinToString(", ") { c ->
+                                "${c.uuid} (properties ${c.properties})"
+                            }
+                        }
+                    } else "Service discovery failed (status $status)."
+                    runOnUiThread {
+                        controllerStatus.text = "BLE service diagnostics (read-only):\\n$summary\\nNo haptic reports were sent. A verified writable protocol is still required."
+                    }
+                    gatt.close()
+                }
+            })
+        } catch (e: Exception) {
+            controllerStatus.text = "Bluetooth diagnostics failed: ${e.message}"
         }
     }
 
