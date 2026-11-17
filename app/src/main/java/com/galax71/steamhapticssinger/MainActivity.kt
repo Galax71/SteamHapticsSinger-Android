@@ -44,7 +44,9 @@ class MainActivity : Activity() {
     private var playbackSession = 0
     private var controllerHapticsEnabled = true
     private var lastHapticErrorShown = false
-    private var midiOutputMode = 1
+    private var midiOutputMode = 0
+    private lateinit var outputSelector: RadioGroup
+    private var outputModeChosenManually = false
     private var repeatMidiPlayback = false
     private var limitHapticsToTwoChannels = false
     private val puck by lazy { SteamPuckHaptics(this) }
@@ -80,7 +82,7 @@ class MainActivity : Activity() {
         midiStatus = TextView(this).apply { text = "Choose a Standard MIDI File (.mid/.midi). Simple synthesized sine-wave output; no instrument soundfont." }
         column.addView(midiStatus)
         column.addView(TextView(this).apply { text = "MIDI output"; textSize = 20f })
-        val outputSelector = RadioGroup(this).apply { orientation = RadioGroup.VERTICAL }
+        outputSelector = RadioGroup(this).apply { orientation = RadioGroup.VERTICAL }
         listOf("Phone speaker", "Steam Controller haptics", "Both (phone + controller)").forEachIndexed { index, label ->
             outputSelector.addView(RadioButton(this).apply {
                 id = 5100 + index
@@ -88,7 +90,7 @@ class MainActivity : Activity() {
                 textSize = 16f
             })
         }
-        outputSelector.check(5101)
+        outputSelector.check(5100)
         column.addView(outputSelector)
         outputStatus = TextView(this).apply {
             text = "Steam Controller haptics selected. Direct USB-C or Puck supported experimentally."
@@ -96,6 +98,7 @@ class MainActivity : Activity() {
         }
         column.addView(outputStatus)
         outputSelector.setOnCheckedChangeListener { _, selected ->
+            outputModeChosenManually = true
             midiOutputMode = (selected - 5100).coerceIn(0, 2)
             controllerHapticsEnabled = midiOutputMode != 0
             if (midiOutputMode == 0) cancelControllerVibration()
@@ -479,6 +482,10 @@ class MainActivity : Activity() {
 
     private fun playWithNotes(song: MidiSong, filename: String) {
         if (midiOutputMode != 0) {
+            if (puck.preferredDevice() == null) {
+                midiStatus.text = "No supported USB haptic transport is connected. Bluetooth gamepad pairing does not provide musical haptic output. Choose Phone speaker to play MIDI."
+                return
+            }
             if (!puck.hasPermission()) {
                 connectPuck()
                 midiStatus.text = "Grant USB access to the connected Steam Controller and press Play again."
@@ -725,7 +732,18 @@ class MainActivity : Activity() {
                 "Android gamepad found: ${gamepads.first().name}. MIDI pitch output is not available over Android's generic vibrator API."
             else -> "No supported Steam Controller connection detected."
         }
-        outputStatus.text = info
+        // Automatically choose an output only when a verified USB-capable path exists.
+        // Bluetooth pairing alone cannot drive Steam musical haptics.
+        if (::outputSelector.isInitialized && !outputModeChosenManually) {
+            val usbReady = (direct.isNotEmpty() || receiver != null) && puck.hasPermission() &&
+                puck.connect().startsWith("Connected", ignoreCase = true)
+            val desiredMode = if (usbReady) 1 else 0
+            if (midiOutputMode != desiredMode) {
+                outputSelector.check(5100 + desiredMode)
+                outputModeChosenManually = false
+            }
+        }
+        outputStatus.text = info + if (midiOutputMode == 0) "\\nOutput: Phone speaker (automatic safe fallback)." else "\\nOutput: Controller haptics (USB experimental)."
         controllerStatus.text = info
     }
 
