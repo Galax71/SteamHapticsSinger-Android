@@ -25,7 +25,7 @@ Bluetooth MIDI haptics are currently marked **Coming soon**. USB-C and Steam Puc
 - **USB:** Steam Controller 2026 direct USB-C (Valve 28DE:1302) or Steam Puck (28DE:1304) requires the device to support USB Host/OTG, a suitable data cable/adapter, and user-granted USB permission. Some devices cannot power the accessory reliably.
 - **Bluetooth:** Optional device capability; paired-device discovery only. Android 12+ requires Bluetooth Connect permission to read paired-device names, and this app does not yet request it automatically. Bluetooth MIDI haptic playback is temporarily disabled and labeled Coming soon, pending a verified working transport.
 - **No controller:** MIDI file import and phone-speaker preview can be used without USB or Bluetooth controller hardware.
-- **Android 6â€“7:** The gamepad vibration test uses a legacy vibration fallback; newer Android uses VibrationEffect.
+- **Android 6+:** The gamepad vibration test uses a legacy vibration fallback; newer Android uses VibrationEffect.
 - **Android 12+:** USB permission PendingIntent uses the modern mutability flag; older versions omit that flag.
 - **Android 13+:** USB permission broadcast receiver uses the modern receiver registration flags.
 
